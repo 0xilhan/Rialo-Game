@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rialo: The Oracle Slayer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Orbitron', sans-serif;
+            background-color: #0a0a1a;
+            color: #e0e0ff;
+            overflow: hidden;
+        }
+        canvas {
+            background-color: #000;
+            /* Procedural Starfield */
+            background-image:
+                radial-gradient(1.5px 1.5px at 25px 55px, white, transparent),
+                radial-gradient(1px 1px at 70px 90px, white, transparent),
+                radial-gradient(2px 2px at 150px 180px, white, transparent),
+                radial-gradient(1px 1px at 180px 40px, white, transparent);
+            background-color: #0a0a1a;
+            background-size: 200px 200px; /* Tile size for the gradients */
+            cursor: crosshair;
+            border-radius: 0.5rem;
+            border: 2px solid #3a3a8a;
+        }
+        .game-ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .modal {
+            background-color: rgba(10, 10, 26, 0.9);
+            border: 2px solid #3a3a8a;
+            pointer-events: all;
+        }
+        .button {
+            background-color: #4f46e5;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            border: 2px solid #6366f1;
+            box-shadow: 0 0 10px #4f46e5, 0 0 20px #4f46e5 inset;
+        }
+        .button:hover {
+            background-color: #6366f1;
+            transform: translateY(-2px);
+            box-shadow: 0 0 15px #6366f1, 0 0 30px #4f46e5 inset;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center h-screen m-0">
+
+    <div id="game-container" class="relative w-full max-w-sm aspect-[9/16] shadow-2xl shadow-indigo-500/50">
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- Game UI Overlay -->
+        <div class="game-ui-overlay flex flex-col justify-between p-4 text-lg">
+            <!-- Top UI -->
+            <div class="flex justify-between items-center text-white">
+                <h1 class="text-2xl font-bold text-indigo-400 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">RIALO: THE ORACLE SLAYER</h1>
+                <div class="text-right">
+                    <span class="font-bold">SCORE:</span>
+                    <span id="scoreEl">0</span>
+                </div>
+            </div>
+
+            <!-- Bottom UI (can be used for health, etc.) -->
+            <div></div>
+        </div>
+
+        <!-- Start Game Modal -->
+        <div id="startModal" class="modal absolute inset-0 flex flex-col items-center justify-center text-center p-8 rounded-lg">
+             <h2 class="text-5xl font-bold text-indigo-400 mb-4 drop-shadow-[0_0_5px_#6366f1]">Welcome, Slayer!</h2>
+             <p class="text-xl mb-2">Your mission: Eliminate centralized threats to the ecosystem.</p>
+             <p class="text-gray-400 mb-6 max-w-md">Move your ship with the <span class="text-indigo-400 font-bold">MOUSE</span>. <span class="text-indigo-400 font-bold">CLICK</span> to fire Rialo-powered projectiles. Defend decentralization!</p>
+             <button id="startGameBtn" class="button">Start Mission</button>
+        </div>
+
+        <!-- Game Over Modal -->
+        <div id="gameOverModal" class="modal absolute inset-0 flex-col items-center justify-center text-center p-8 rounded-lg hidden">
+            <h2 class="text-5xl font-bold mb-2">MISSION FAILED</h2>
+            <p class="text-2xl mb-4">Final Score: <span id="finalScoreEl" class="text-indigo-400 font-bold">0</span></p>
+            <p class="text-gray-400 mb-6">The centralized forces have overwhelmed you... for now.</p>
+            <button id="restartGameBtn" class="button">Try Again</button>
+       </div>
+
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- GAME SETUP ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gameContainer = document.getElementById('game-container');
+
+        const scoreEl = document.getElementById('scoreEl');
+        const finalScoreEl = document.getElementById('finalScoreEl');
+        const startModal = document.getElementById('startModal');
+        const gameOverModal = document.getElementById('gameOverModal');
+        const startGameBtn = document.getElementById('startGameBtn');
+        const restartGameBtn = document.getElementById('restartGameBtn');
+
+        let animationId;
+        let score = 0;
+        let gameActive = false;
+
+        function resizeCanvas() {
+            canvas.width = gameContainer.clientWidth;
+            canvas.height = gameContainer.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        
+        // --- AUDIO SETUP (Tone.js) ---
+        const synth = new Tone.PolySynth().toDestination();
+        const metalSynth = new Tone.MetalSynth({
+            frequency: 150,
+            envelope: { attack: 0.001, decay: 0.1, release: 0.01 },
+            harmonicity: 3.1,
+            modulationIndex: 32,
+            resonance: 4000,
+            octaves: 1.5
+        }).toDestination();
+
+        function playShootSound() {
+            if (Tone.context.state !== 'running') {
+                Tone.context.resume();
+            }
+            synth.triggerAttackRelease("C5", "8n");
+        }
+        function playExplosionSound() {
+            metalSynth.triggerAttackRelease("C2", "0.2");
+        }
+        function playGameOverSound() {
+            synth.triggerAttackRelease(["C3", "G2", "E2"], "1n");
+        }
+
+
+        // --- ASSET CONFIGURATION ---
+        // 🔧 TO USE YOUR OWN IMAGES:
+        // 1. Upload your PNG files.
+        // 2. Replace the `data:image/svg+xml...` strings below with the URLs to your files.
+        // 3. Keep the placeholder SVGs if you don't have images yet.
+
+        const ASSETS = {
+            PLAYER: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNGY0NmU1IiBzdHJva2Utd2lkdGg9IjEuNSI+PHBhdGggc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBkPSJNMTIgMkwzLjUgMjFoMTdMMTIgMnpNMTIgOWw4LjUgMTJoLTE3TDEyIDl6IiAvPjwvc3ZnPg==',
+            BULLET: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzYzNmZmMSI+PHBhdGggZD0iTTcgMTFsNSA1IDUtNUg3eiIgLz48cGF0aCBkPSJNNyAxMWw1LTUgNSg1SDd6IiAvPjwvc3ZnPg==',
+            ENEMY_ORACLE: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZjQzZjVhIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMyIvPjxwYXRoIGQ9Ik0yMSAxMmEzIDMgMCAwMS02IDBtNiAwYTkgOSAwIDAwLTE4IDBtMTggMGEzIDMgMCAwMC02IDBtLTYgMGE5IDkgMCAwMS0xOCAwIi8+PC9zdmc+',
+            ENEMY_BRIDGE: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmFjYzFjIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHJlY3QgeD0iMyIgeT0iOCIgd2lkdGg9IjYiIGhlaWdodD0iOCIgcng9IjEiLz48cmVjdCB4PSIxNSIgeT0iOCIgd2lkdGg9IjYiIGhlaWdodD0iOCIgcng9IjEiLz48bGluZSB4MT0iOSIgeTE9IjEyIiB4Mj0iMTUiIHkyPSIxMiIvPjxwYXRoIGQ9Im0xMSA5IDMgMy0zIDMiLz48L3N2Zz4=',
+            ENEMY_CHAIN: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjYTc4YmYyIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTcgN2gybDIgMm0wIDBsMiAyTTUgNWwyIDJtNyA3bDQtNE05IDVsMiAybTIgMmwyLTJNNyA5bDIgMm01IDVsMi0ybS05IDNsMiAybTEgMWwyIDIiLz48L3N2Zz4=',
+            ENEMY_VALIDATOR: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZjkxODYxIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTQgNGgxNnYxNkg0eiIvPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjMiLz48bGluZSB4MT0iMTIiIHkxPSI4IiB4Mj0iMTIiIHkyPSI0Ii8+PGxpbmUgeDE9IjEyIiB5MT0iMjAiIHkyPSIxMiIvPjxsaW5lIHgxPSIxNiIgeTE9IjEyIiB4Mj0iMjAiIHkyPSIxMiIvPjxsaW5lIHgxPSI0IiB5MT0iMTIiIHgyPSI4IiB5Mj0iMTIiLz48L3N2Zz4='
+        };
+        
+        const preloadedImages = {};
+        Object.keys(ASSETS).forEach(key => {
+            const img = new Image();
+            img.src = ASSETS[key];
+            preloadedImages[key] = img;
+        });
+
+
+        // --- GAME CLASSES ---
+        class GameObject {
+            constructor(x, y, radius) {
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.velocity = { x: 0, y: 0 };
+            }
+            draw() {}
+            update() {
+                this.draw();
+                this.x += this.velocity.x;
+                this.y += this.velocity.y;
+            }
+        }
+
+        class Player extends GameObject {
+            constructor(x, y, radius) {
+                super(x, y, radius);
+                this.image = preloadedImages.PLAYER;
+                this.rotation = 0;
+            }
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.drawImage(this.image, -this.radius, -this.radius, this.radius * 2, this.radius * 2);
+                ctx.restore();
+            }
+        }
+
+        class Bullet extends GameObject {
+            constructor(x, y, radius, velocity) {
+                super(x, y, radius);
+                this.velocity = velocity;
+                this.image = preloadedImages.BULLET;
+                this.alpha = 1;
+            }
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.drawImage(this.image, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
+                ctx.restore();
+            }
+            update() {
+                super.update();
+                this.alpha -= 0.01;
+            }
+        }
+
+        class Enemy extends GameObject {
+            constructor(x, y, radius, velocity, type) {
+                super(x, y, radius);
+                this.velocity = velocity;
+                this.type = type;
+                this.image = preloadedImages[type.asset];
+                this.health = type.health;
+                this.points = type.points;
+            }
+             draw() {
+                ctx.drawImage(this.image, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
+            }
+        }
+        
+        class Particle extends GameObject {
+            constructor(x, y, radius, velocity, color) {
+                super(x, y, radius);
+                this.velocity = velocity;
+                this.color = color;
+                this.alpha = 1;
+                this.friction = 0.99;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.restore();
+            }
+
+            update() {
+                this.velocity.x *= this.friction;
+                this.velocity.y *= this.friction;
+                super.update();
+                this.alpha -= 0.02;
+            }
+        }
+        
+        class FloatingText {
+            constructor(x, y, text, color) {
+                this.x = x;
+                this.y = y;
+                this.text = text;
+                this.color = color;
+                this.alpha = 1;
+                this.velocity = { y: -1 };
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.font = '16px Orbitron';
+                ctx.fillStyle = this.color;
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
+
+            update() {
+                this.draw();
+                this.y += this.velocity.y;
+                this.alpha -= 0.02;
+            }
+        }
+        
+        // --- GAME LOGIC & STATE ---
+        let player;
+        let bullets;
+        let enemies;
+        let particles;
+        let floatingTexts;
+        let spawnInterval;
+        let difficultyMultiplier;
+
+        const ENEMY_TYPES = {
+            ORACLE: { asset: 'ENEMY_ORACLE', health: 1, points: 10, radius: 25, message: '+10 for Decentralization!' },
+            BRIDGE: { asset: 'ENEMY_BRIDGE', health: 2, points: 20, radius: 30, message: '+20 Bridge Removed!' },
+            CHAIN: { asset: 'ENEMY_CHAIN', health: 3, points: 30, radius: 20, message: '+30 Chain Repaired!' },
+            VALIDATOR: { asset: 'ENEMY_VALIDATOR', health: 5, points: 50, radius: 40, message: '+50 Centralization Smashed!' }
+        };
+
+        function init() {
+            gameActive = true;
+            score = 0;
+            scoreEl.textContent = 0;
+            difficultyMultiplier = 1;
+            
+            player = new Player(canvas.width / 2, canvas.height - 50, 25);
+            bullets = [];
+            enemies = [];
+            particles = [];
+            floatingTexts = [];
+            
+            gameOverModal.classList.add('hidden');
+            startModal.classList.add('hidden');
+
+            if (spawnInterval) clearInterval(spawnInterval);
+            spawnInterval = setInterval(spawnEnemies, 1500);
+            
+            animate();
+        }
+
+        function spawnEnemies() {
+            if (!gameActive) return;
+
+            const radius = Math.random() * 20 + 20;
+            const x = Math.random() * (canvas.width - radius * 2) + radius;
+            const y = -radius;
+
+            const angle = Math.PI / 2;
+            const speed = Math.random() * 1.5 + 1 * difficultyMultiplier;
+            const velocity = { x: 0, y: speed };
+            
+            const enemyTypes = Object.values(ENEMY_TYPES);
+            const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+
+            enemies.push(new Enemy(x, y, type.radius, velocity, type));
+            
+            // Increase difficulty over time
+            if (spawnInterval > 500) {
+                 clearInterval(spawnInterval);
+                 spawnInterval = setInterval(spawnEnemies, 1500 / (difficultyMultiplier += 0.05));
+            }
+        }
+        
+        let screenShake = { intensity: 0, duration: 0 };
+        function triggerScreenShake(intensity, duration) {
+            screenShake.intensity = intensity;
+            screenShake.duration = duration;
+        }
+
+        // --- MAIN ANIMATION LOOP ---
+        function animate() {
+            if (!gameActive) return;
+            animationId = requestAnimationFrame(animate);
+
+            // Screen Shake Effect
+            let dx = 0, dy = 0;
+            if (screenShake.duration > 0) {
+                dx = (Math.random() - 0.5) * screenShake.intensity;
+                dy = (Math.random() - 0.5) * screenShake.intensity;
+                screenShake.duration--;
+            }
+            
+            ctx.save();
+            ctx.translate(dx, dy);
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            player.update();
+
+            // Update particles
+            particles.forEach((particle, index) => {
+                if (particle.alpha <= 0) {
+                    particles.splice(index, 1);
+                } else {
+                    particle.update();
+                }
+            });
+            
+            // Update floating texts
+            floatingTexts.forEach((text, index) => {
+                if (text.alpha <= 0) {
+                    floatingTexts.splice(index, 1);
+                } else {
+                    text.update();
+                }
+            });
+
+            // Update bullets
+            bullets.forEach((bullet, bIndex) => {
+                if (bullet.alpha <= 0 || bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
+                    setTimeout(() => bullets.splice(bIndex, 1), 0);
+                } else {
+                    bullet.update();
+                }
+            });
+
+            // Update enemies & check for collisions
+            enemies.forEach((enemy, eIndex) => {
+                enemy.update();
+
+                // Check collision with player (game over)
+                const distPlayer = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+                if (distPlayer - enemy.radius - player.radius < 1) {
+                    gameOver();
+                }
+
+                // Check collision with bullets
+                bullets.forEach((bullet, bIndex) => {
+                    const distBullet = Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y);
+                    if (distBullet - enemy.radius - bullet.radius < 1) {
+                        
+                        // Create hit particles
+                         for (let i = 0; i < 5; i++) {
+                            particles.push(new Particle(bullet.x, bullet.y, Math.random() * 2, {
+                                x: (Math.random() - 0.5) * 2,
+                                y: (Math.random() - 0.5) * 2
+                            }, '#fff'));
+                        }
+
+                        enemy.health -= 1;
+                        if (enemy.health <= 0) {
+                             // Create explosion
+                            for (let i = 0; i < enemy.radius * 1.5; i++) {
+                                particles.push(new Particle(bullet.x, bullet.y, Math.random() * 3, {
+                                    x: (Math.random() - 0.5) * (Math.random() * 6),
+                                    y: (Math.random() - 0.5) * (Math.random() * 6)
+                                }, `hsl(${Math.random() * 60 + 220}, 80%, 60%)`));
+                            }
+                            
+                            // Update score
+                            score += enemy.points;
+                            scoreEl.textContent = score;
+
+                            // Add floating text
+                            floatingTexts.push(new FloatingText(enemy.x, enemy.y, enemy.type.message, '#4ade80'));
+                            
+                            triggerScreenShake(5, 10);
+                            playExplosionSound();
+
+                            setTimeout(() => enemies.splice(eIndex, 1), 0);
+                        }
+                        setTimeout(() => bullets.splice(bIndex, 1), 0);
+                    }
+                });
+            });
+            ctx.restore();
+        }
+        
+        function gameOver() {
+            if (!gameActive) return;
+            gameActive = false;
+            cancelAnimationFrame(animationId);
+            clearInterval(spawnInterval);
+            
+            playGameOverSound();
+            triggerScreenShake(15, 30);
+            
+            finalScoreEl.textContent = score;
+            gameOverModal.classList.remove('hidden');
+        }
+
+        // --- EVENT LISTENERS ---
+        const mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+        
+        canvas.addEventListener('mousemove', (event) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = event.clientX - rect.left;
+            mouse.y = event.clientY - rect.top;
+            
+            // Clamp player position within canvas bounds
+            const buffer = player ? player.radius : 25;
+            player.x = Math.max(buffer, Math.min(canvas.width - buffer, mouse.x));
+            player.y = Math.max(buffer, Math.min(canvas.height - buffer, mouse.y));
+        });
+
+        canvas.addEventListener('click', (event) => {
+            if (!gameActive) return;
+
+            const angle = Math.atan2(event.clientY - (canvas.getBoundingClientRect().top + player.y), event.clientX - (canvas.getBoundingClientRect().left + player.x));
+            const bulletSpeed = 5;
+
+            // Fire upwards
+            const velocity = { x: 0, y: -bulletSpeed * 2 };
+            
+            bullets.push(new Bullet(player.x, player.y - player.radius, 5, velocity));
+            playShootSound();
+        });
+
+        startGameBtn.addEventListener('click', init);
+        restartGameBtn.addEventListener('click', init);
+    });
+    </script>
+</body>
+</html>
+
