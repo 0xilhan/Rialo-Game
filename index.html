@@ -6,7 +6,7 @@
     <title>Rialo: The Oracle Slayer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Orbitron', sans-serif;
@@ -21,6 +21,7 @@
             border-radius: 0.5rem;
             border: 2px solid #3a3a8a;
             box-shadow: 0 0 15px rgba(79, 70, 229, 0.5);
+            transition: transform 0.1s ease-out;
         }
         .game-ui-overlay {
             position: absolute;
@@ -54,61 +55,114 @@
             transform: translateY(-2px);
             box-shadow: 0 0 15px #6366f1, 0 0 10px #6366f1 inset, 0 0 25px #6366f1;
         }
-        .neon-text {
-            animation: neon-flicker 3s infinite alternate;
-            text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 20px #6366f1, 0 0 30px #6366f1;
+        .title-glitch { animation: glitch 2s linear infinite; }
+        @keyframes glitch { 2%, 64% { transform: translate(2px, 0) skew(0deg); } 4%, 60% { transform: translate(-2px, 0) skew(0deg); } 62% { transform: translate(0, 0) skew(5deg); } }
+        .title-glitch::before, .title-glitch::after { content: attr(data-text); position: absolute; left: 0; width: 100%; height: 100%; background: transparent; }
+        .title-glitch::before { left: 2px; text-shadow: -2px 0 #ff00c1; clip: rect(44px, 450px, 56px, 0); animation: glitch-anim 5s infinite linear alternate-reverse; }
+        .title-glitch::after { left: -2px; text-shadow: -2px 0 #00fff9, 2px 2px #ff00c1; clip: rect(86px, 450px, 90px, 0); animation: glitch-anim-2 3s infinite linear alternate-reverse; }
+        @keyframes glitch-anim { 0% { clip: rect(46px, 9999px, 15px, 0); } 100% { clip: rect(3px, 9999px, 83px, 0); } }
+        @keyframes glitch-anim-2 { 0% { clip: rect(2px, 9999px, 90px, 0); } 100% { clip: rect(40px, 9999px, 3px, 0); } }
+
+        .score-text { text-shadow: 0 0 3px #fff, 0 0 8px #6366f1; }
+        #xpBar { transition: width 0.3s ease-out; }
+        .helper-card { transition: all 0.2s ease-in-out; }
+        .helper-card:hover { transform: translateY(-5px) scale(1.05); box-shadow: 0 0 25px rgba(16, 185, 129, 0.7); border-color: #10b981; }
+        
+        #reviveModal {
+            background: radial-gradient(ellipse at center, rgba(10, 40, 20, 0.95) 0%, rgba(10, 10, 26, 0.98) 70%);
+            border-color: #00ff8a;
+            animation: pulse-green 1.5s infinite;
         }
-        .score-text {
-             text-shadow: 0 0 3px #fff, 0 0 8px #6366f1;
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 20px rgba(0, 255, 138, 0.4); }
+            50% { box-shadow: 0 0 35px rgba(0, 255, 138, 0.8); }
+            100% { box-shadow: 0 0 20px rgba(0, 255, 138, 0.4); }
         }
-        @keyframes neon-flicker {
-            0%, 18%, 22%, 25%, 53%, 57%, 100% {
-                text-shadow:
-                0 0 4px #fff,
-                0 0 11px #fff,
-                0 0 19px #fff,
-                0 0 40px #4f46e5,
-                0 0 80px #4f46e5;
-            }
-            20%, 24%, 55% {
-                text-shadow: none;
-            }
+
+        .palpitating-heart {
+            width: 100px;
+            height: 100px;
+            color: #00ff8a;
+            animation: palpitation 0.7s infinite;
+            filter: drop-shadow(0 0 15px rgba(0, 255, 138, 0.8));
+        }
+
+        @keyframes palpitation {
+            0% { transform: scale(1); }
+            20% { transform: scale(1.25); }
+            40% { transform: scale(1); }
+            60% { transform: scale(1.15); }
+            100% { transform: scale(1); }
         }
     </style>
 </head>
 <body class="flex items-center justify-center h-screen m-0">
 
-    <div id="game-container" class="relative w-full max-w-sm aspect-[9/16] shadow-2xl shadow-indigo-500/50">
+    <div id="game-container" class="relative w-full max-w-sm aspect-[9/16] shadow-2xl shadow-indigo-500/50 overflow-hidden rounded-lg">
         <canvas id="gameCanvas"></canvas>
 
-        <!-- Game UI Overlay -->
-        <div class="game-ui-overlay flex flex-col justify-between p-4 text-lg">
+        <!-- Game UI Overlay --><div class="game-ui-overlay flex flex-col justify-between p-4 text-lg">
             <div class="flex justify-between items-start text-white">
-                <h1 class="text-xl font-bold text-indigo-400 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] score-text">RIALO SLAYER</h1>
+                <div class="text-left">
+                    <span id="levelEl" class="font-bold score-text text-xl">LVL: 1</span>
+                    <div id="xpBarContainer" class="w-24 h-2 bg-gray-700/50 rounded-full mt-1 border border-indigo-400/50 backdrop-blur-sm">
+                        <div id="xpBar" class="h-full bg-green-400 rounded-full"></div>
+                    </div>
+                </div>
                 <div class="text-right">
                     <span class="font-bold score-text">SCORE:</span>
                     <span id="scoreEl" class="score-text">0</span>
                 </div>
             </div>
-            <div></div>
+            <div id="powerUpUI" class="flex justify-center gap-4"></div>
         </div>
 
-        <!-- Start Game Modal -->
-        <div id="startModal" class="modal absolute inset-0 flex flex-col items-center justify-center text-center p-8 rounded-lg">
-             <h2 class="text-6xl font-bold text-indigo-300 mb-8 neon-text">RIALO</h2>
-             <p class="text-xl mb-12 text-gray-300 score-text">By Sub Zero Labs</p>
+        <!-- Start Game Modal --><div id="startModal" class="modal absolute inset-0 flex flex-col items-center justify-center text-center p-8 rounded-lg">
+             <h2 class="relative text-6xl font-black text-indigo-300 mb-8 title-glitch" data-text="RIALO">RIALO</h2>
+             <p class="text-xl mb-4 text-gray-300 score-text">By Sub Zero Labs</p>
+             <div class="text-sm text-gray-400 mb-10 border border-gray-600 rounded-lg p-3 bg-black/20">
+                <p><span class="font-bold text-indigo-400">Move/Touch:</span> Steer Ship</p>
+                <p><span class="font-bold text-indigo-400">Hold:</span> Continuous Fire</p>
+                <p><span class="font-bold text-indigo-400">Double Tap:</span> Use Bomb</p>
+             </div>
              <button id="startGameBtn" class="button">Start Mission</button>
         </div>
 
-        <!-- Game Over Modal -->
-        <div id="gameOverModal" class="modal absolute inset-0 flex-col items-center justify-center text-center p-8 rounded-lg hidden">
-            <h2 class="text-5xl font-bold mb-2 neon-text">GAME OVER</h2>
-            <p class="text-2xl mb-4 score-text">Final Score: <span id="finalScoreEl" class="text-indigo-400 font-bold">0</span></p>
-            <div id="achievement-area" class="my-4 h-48 flex flex-col items-center justify-center">
-                <p id="achievement-text" class="text-lg text-amber-300 mb-2"></p>
+        <!-- Revive Modal --><div id="reviveModal" class="modal absolute inset-0 flex flex-col items-center justify-around text-center p-4 rounded-lg hidden">
+            <div>
+                <h2 class="text-3xl font-bold text-green-400 mb-2 score-text animate-pulse">FLATLINING...</h2>
+                <p class="text-gray-300">Choose a teammate for emergency revival.</p>
+            </div>
+            <div class="grid grid-cols-3 gap-3 w-full max-w-xs">
+                <div id="helper1" class="helper-card cursor-pointer bg-black/30 p-2 rounded-lg border-2 border-gray-600">
+                    <img id="helper1Img" src="https://placehold.co/100x100/052e16/a7f3d0?text=HELPER+1" class="w-full h-auto rounded-md mx-auto mb-2">
+                    <p class="font-bold text-sm text-green-400">Revive with Shield</p>
+                </div>
+                <div id="helper2" class="helper-card cursor-pointer bg-black/30 p-2 rounded-lg border-2 border-gray-600">
+                    <img id="helper2Img" src="https://placehold.co/100x100/052e16/a7f3d0?text=HELPER+2" class="w-full h-auto rounded-md mx-auto mb-2">
+                    <p class="font-bold text-sm text-amber-400">Activate Clone Attack</p>
+                </div>
+                 <div id="helper3" class="helper-card cursor-pointer bg-black/30 p-2 rounded-lg border-2 border-gray-600">
+                    <img id="helper3Img" src="https://placehold.co/100x100/052e16/a7f3d0?text=HELPER+3" class="w-full h-auto rounded-md mx-auto mb-2">
+                    <p class="font-bold text-sm text-sky-400">Revive with Score Boost</p>
+                </div>
+            </div>
+            <svg class="palpitating-heart" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
+        </div>
+
+        <!-- Game Over Modal --><div id="gameOverModal" class="modal absolute inset-0 flex flex-col items-center justify-around text-center p-6 rounded-lg hidden">
+            <h2 class="text-5xl font-bold neon-text">MISSION FAILED</h2>
+            <p class="text-2xl score-text">Final Score: <span id="finalScoreEl" class="text-indigo-400 font-bold">0</span></p>
+            <div class="flex flex-col items-center justify-center w-full">
+                <p id="achievement-text" class="text-lg text-amber-300 mb-2 font-bold px-2"></p>
                 <img id="achievement-meme" src="" class="max-h-36 rounded-lg hidden" alt="Achievement Meme"/>
             </div>
-            <button id="restartGameBtn" class="button">Try Again</button>
+            <div class="flex gap-4">
+                <button id="restartGameBtn" class="button">Try Again</button>
+                <button id="shareScoreBtn" class="button">Share</button>
+            </div>
        </div>
     </div>
 
@@ -119,333 +173,316 @@
         const gameContainer = document.getElementById('game-container');
         const scoreEl = document.getElementById('scoreEl');
         const finalScoreEl = document.getElementById('finalScoreEl');
+        const levelEl = document.getElementById('levelEl');
+        const xpBar = document.getElementById('xpBar');
         const startModal = document.getElementById('startModal');
         const gameOverModal = document.getElementById('gameOverModal');
+        const reviveModal = document.getElementById('reviveModal');
         const startGameBtn = document.getElementById('startGameBtn');
         const restartGameBtn = document.getElementById('restartGameBtn');
+        const shareScoreBtn = document.getElementById('shareScoreBtn');
         const achievementText = document.getElementById('achievement-text');
         const achievementMeme = document.getElementById('achievement-meme');
+        const helper1Btn = document.getElementById('helper1');
+        const helper2Btn = document.getElementById('helper2');
+        const helper3Btn = document.getElementById('helper3');
 
-        let animationId, score = 0, gameActive = false;
+        let animationId, score = 0, gameActive = false, frame = 0, pauseGame = false;
 
-        function resizeCanvas() {
-            canvas.width = gameContainer.clientWidth;
-            canvas.height = gameContainer.clientHeight;
-        }
+        function resizeCanvas() { canvas.width = gameContainer.clientWidth; canvas.height = gameContainer.clientHeight; }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
         
+        // --- AUDIO SETUP ---
         const synth = new Tone.PolySynth().toDestination();
-        const metalSynth = new Tone.MetalSynth({ frequency: 150, envelope: { attack: 0.001, decay: 0.1, release: 0.01 }, harmonicity: 3.1, modulationIndex: 32, resonance: 4000, octaves: 1.5 }).toDestination();
-        function playSound(type) {
+        const metalSynth = new Tone.PolySynth(Tone.MetalSynth).toDestination();
+        const hitSynth = new Tone.MembraneSynth().toDestination();
+        const levelUpSynth = new Tone.FMSynth().toDestination();
+        const comboSynth = new Tone.FMSynth({ modulationIndex: 10, harmonicity: 3, envelope: { attack: 0.01, decay: 0.1 } }).toDestination();
+        const playerHitSynth = new Tone.NoiseSynth({noise: {type: 'pink'}, envelope: {attack: 0.001, decay: 0.1, sustain: 0}}).toDestination();
+        const bossLaughSynth = new Tone.MonoSynth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.1, decay: 0.4, sustain: 0.1, release: 0.8 }, filterEnvelope: { attack: 0.05, decay: 0.2, sustain: 0.5, release: 1, baseFrequency: 100, octaves: 2 } }).toDestination();
+        const shootSynth = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.1, release: 0.2 } }).toDestination();
+        shootSynth.volume.value = -12;
+        const heartbeatSynth = new Tone.MembraneSynth({ pitchDecay: 0.01, octaves: 2, envelope: { attack: 0.001, decay: 0.5, sustain: 0 } }).toDestination();
+        heartbeatSynth.volume.value = -3;
+        
+        let musicLoop, heartbeatLoop;
+        function startMusic() { if (Tone.context.state !== 'running') Tone.context.resume(); if (musicLoop) musicLoop.stop(0); const notes = ["C2", "G2", "Eb2", "Bb2"]; let noteIndex = 0; musicLoop = new Tone.Loop(time => { const synth = new Tone.Synth({ oscillator: { type: 'amsine' }, envelope: { attack: 0.1, decay: 0.7, sustain: 0.1, release: 1 } }).toDestination(); synth.triggerAttackRelease(notes[noteIndex % notes.length], "2n", time); noteIndex++; }, "1n").start(0); Tone.Transport.start(); }
+        function startHeartbeatSound() { if (heartbeatLoop) heartbeatLoop.stop(0); heartbeatLoop = new Tone.Loop(time => { heartbeatSynth.triggerAttackRelease("C1", "8n", time); heartbeatSynth.triggerAttackRelease("C1", "8n", time + 0.25); }, "0.7s").start(0); if(Tone.Transport.state !== 'started') Tone.Transport.start(); }
+        function stopHeartbeatSound() { if (heartbeatLoop) heartbeatLoop.stop(0); }
+
+        function playSound(type, note) {
             if (Tone.context.state !== 'running') Tone.context.resume();
-            if (type === 'shoot') synth.triggerAttackRelease("C5", "8n");
+            if (type === 'shoot') shootSynth.triggerAttackRelease("A4", "16n");
             else if (type === 'explosion') metalSynth.triggerAttackRelease("C2", "0.2");
             else if (type === 'powerup') synth.triggerAttackRelease(["C4", "E4", "G4"], "0.2");
-            else if (type === 'gameOver') synth.triggerAttackRelease(["C3", "G2", "E2"], "1n");
+            else if (type === 'gameOver') { if(musicLoop) musicLoop.stop(0); if(heartbeatLoop) heartbeatLoop.stop(0); Tone.Transport.stop(); synth.triggerAttackRelease(["C3", "G2", "E2"], "1n"); }
+            else if (type === 'hit') hitSynth.triggerAttackRelease("G4", "8n");
+            else if (type === 'levelUp') levelUpSynth.triggerAttackRelease("C5", "0.5");
+            else if (type === 'combo') comboSynth.triggerAttackRelease(note, "8n");
+            else if (type === 'playerHit') playerHitSynth.triggerAttackRelease("0.1");
+            else if (type === 'bossLaugh') { bossLaughSynth.triggerAttackRelease("G2", "1n"); setTimeout(() => bossLaughSynth.triggerAttackRelease("F#2", "1n"), 300); }
         }
 
-        // --- ASSET CONFIGURATION ---
+        // --- ASSET CONFIG ---
         const ASSETS = {
-            // 🔧 PLAYER: Larger SVG with a radial gradient for a 3D effect.
             PLAYER: 'https://raw.githubusercontent.com/0xilhan/Rialo-Game/d28d0139c427c24feb1e81d40130f1162a552dad/RialoFighter.png',
-            // 🔧 BULLET: Square logo in a rounded, 3D-effect projectile.
             BULLET: 'https://raw.githubusercontent.com/0xilhan/Rialo-Game/2da1177ada1d1e96d6a4502ca46cf689b279de92/Bullet.png',
+            ENEMY_BULLET: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3Qgd2lkdGg9IjEwIiBoZWlnaHQ9IjIwIiB4PSI3IiB5PSIyIiBmaWxsPSIjZjQ0ZjVhIiByeD0iMyIvPjwvc3ZnPg==',
             ENEMY_ORACLE: 'https://raw.githubusercontent.com/0xilhan/Rialo-Game/2da1177ada1d1e96d6a4502ca46cf689b279de92/sticker1.png',
             ENEMY_BRIDGE: 'https://raw.githubusercontent.com/0xilhan/Rialo-Game/2da1177ada1d1e96d6a4502ca46cf689b279de92/sticker2.png',
             ENEMY_CHAIN: 'https://raw.githubusercontent.com/0xilhan/Rialo-Game/2da1177ada1d1e96d6a4502ca46cf689b279de92/sticker3.png',
             ENEMY_VALIDATOR: 'https://raw.githubusercontent.com/0xilhan/Rialo-Game/2da1177ada1d1e96d6a4502ca46cf689b279de92/sticker4.png',
-            // 🔧 NEW ENEMIES
             ENEMY_MEV_BOT: 'https://raw.githubusercontent.com/0xilhan/Rialo-Game/2da1177ada1d1e96d6a4502ca46cf689b279de92/sticker5.png',
             ENEMY_SILO: 'https://raw.githubusercontent.com/0xilhan/Rialo-Game/2da1177ada1d1e96d6a4502ca46cf689b279de92/sticker6.png',
             ENEMY_RUG_PULL: 'https://raw.githubusercontent.com/0xilhan/Rialo-Game/2da1177ada1d1e96d6a4502ca46cf689b279de92/sticker7.png',
-            // 🔧 POWER-UPS
+            BOSS_ENEMY: 'https://placehold.co/200x200/4c1d95/f5f3ff?text=BOSS',
+            HELPER_1_IMG: document.getElementById('helper1Img').src,
+            HELPER_2_IMG: document.getElementById('helper2Img').src,
+            HELPER_3_IMG: document.getElementById('helper3Img').src,
             POWERUP_SHIELD: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjM2JmYjdlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTIgMTJoMTB2MTBMMiAxMnpNMjIgMmgtMTB2MTBsMTAtMTB6TTIgMmgxMHYxMEwyIDJ6TTIyIDIyaC0xMHYtMTBsMTAgMTB6Ii8+PC9zdmc+',
             POWERUP_RAPID_FIRE: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmE4YWM0IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTEzIDJsOCA1djZjMCA1LTggOS04IDlzOC00IDgtOVY3bC04LTUtOCg1djZjMCA1IDggOSA4IDlzOC00IDgtOVY3bC04LTV6Ii8+PC9zdmc+',
             POWERUP_SCORE_BOOST: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZjJjMjU5IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTEyIDEzbDggOG0tMTYtOGw4IDhtMC0xNmw4IDhtLTE2LTlsOCA4TTQgNGwxNiAxNiIvPjwvc3ZnPg==',
-            // 🔧 MEME ASSETS: Replace these with your actual meme image URLs.
-            MEME_1: 'https://raw.githubusercontent.com/0xilhan/Rialo-Game/2da1177ada1d1e96d6a4502ca46cf689b279de92/result1.png',
-            MEME_2: 'https://raw.githubusercontent.com/0xilhan/Rialo-Game/2da1177ada1d1e96d6a4502ca46cf689b279de92/result2.png',
-            MEME_3: 'https://raw.githubusercontent.com/0xilhan/Rialo-Game/2da1177ada1d1e96d6a4502ca46cf689b279de92/result3%202.png',
+            POWERUP_BOMB: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZjgzYjAwIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iNyIvPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjEiLz48cGF0aCBkPSJtMTIgMiA0IDQiLz48L3N2Zz4=',
+            MEME_LOW_SCORE: 'https://raw.githubusercontent.com/0xilhan/Rialo-Game/2da1177ada1d1e96d6a4502ca46cf689b279de92/result1.png',
+            MEME_MID_SCORE: 'https://raw.githubusercontent.com/0xilhan/Rialo-Game/2da1177ada1d1e96d6a4502ca46cf689b279de92/result2.png',
+            MEME_HIGH_SCORE: 'https://raw.githubusercontent.com/0xilhan/Rialo-Game/2da1177ada1d1e96d6a4502ca46cf689b279de92/result3%202.png',
+            MEME_BULLET_DEATH: 'https://placehold.co/200x150/000000/ff0000?text=Got+Sniped',
         };
         
         const preloadedImages = {};
-        Object.keys(ASSETS).forEach(key => {
-            const img = new Image();
-            img.src = ASSETS[key];
-            preloadedImages[key] = img;
+        Object.keys(ASSETS).forEach(key => { 
+            const img = new Image(); 
+            img.src = ASSETS[key]; 
+            preloadedImages[key] = img; 
         });
 
-        class GameObject {
-            constructor(x, y) { this.x = x; this.y = y; this.velocity = { x: 0, y: 0 }; this.radius = 10; }
-            draw() {}
-            update() { this.draw(); this.x += this.velocity.x; this.y += this.velocity.y; }
+        // --- GAME OBJECTS ---
+        class GameObject { constructor(x, y) { this.x = x; this.y = y; this.velocity = { x: 0, y: 0 }; this.radius = 10; } draw() {} update() { this.draw(); this.x += this.velocity.x; this.y += this.velocity.y; } }
+        class PlayerClone extends GameObject {
+            constructor(x, y) { super(x, y); this.radius = 40; this.image = preloadedImages.PLAYER; }
+            draw() { ctx.save(); ctx.globalAlpha = 0.5; ctx.drawImage(this.image, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2); ctx.restore(); }
+            update() { this.draw(); }
         }
-
-        class Player extends GameObject {
-            constructor(x, y) { super(x, y); this.radius = 40; this.image = preloadedImages.PLAYER; this.shieldActive = false; this.shieldHealth = 3; this.rapidFireActive = false; this.powerUpTimers = {}; }
-            draw() {
-                ctx.save();
-                ctx.translate(this.x, this.y);
-                ctx.drawImage(this.image, -this.radius, -this.radius, this.radius * 2, this.radius * 2);
-                ctx.restore();
-                if (this.shieldActive) {
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.radius + 10, 0, Math.PI * 2);
-                    ctx.strokeStyle = `rgba(59, 251, 126, ${0.3 + (this.shieldHealth / 3) * 0.7})`;
-                    ctx.lineWidth = 5;
-                    ctx.stroke();
-                }
-            }
-            activatePowerUp(type) {
-                if(this.powerUpTimers[type]) clearTimeout(this.powerUpTimers[type]);
-                if(type === 'SHIELD') { this.shieldActive = true; this.shieldHealth = 3; }
+        class Player extends GameObject { constructor(x, y) { super(x, y); this.radius = 40; this.image = preloadedImages.PLAYER; this.shieldActive = false; this.shieldHealth = 3; this.maxShieldHealth = 3; this.rapidFireActive = false; this.powerUpTimers = {}; this.targetX = x; this.targetY = y; this.lerpFactor = 0.15; this.thrusterParticles = []; this.level = 1; this.xp = 0; this.bombs = 1; this.lifelines = 1; this.clones = []; } 
+            update() { this.x += (this.targetX - this.x) * this.lerpFactor; this.y += (this.targetY - this.y) * this.lerpFactor; this.thrusterParticles.push(new Particle(this.x, this.y + this.radius / 2, Math.random() * 2 + 1, {x: (Math.random() - 0.5) * 0.5, y: 3}, `hsl(200, 100%, ${Math.random() * 50 + 50}%)`)); this.thrusterParticles.forEach((p, i) => { if (p.alpha <= 0) this.thrusterParticles.splice(i, 1); else p.update(); }); const tilt = (this.targetX - this.x) * 0.01; ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(tilt); ctx.drawImage(this.image, -this.radius, -this.radius, this.radius * 2, this.radius * 2); ctx.restore(); if (this.shieldActive) { const segmentAngle = (Math.PI * 2) / this.maxShieldHealth; for (let i = 0; i < this.shieldHealth; i++) { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 10, i * segmentAngle, (i + 1) * segmentAngle - 0.1); ctx.strokeStyle = `rgba(59, 251, 126, 0.8)`; ctx.lineWidth = 5; ctx.stroke(); } } this.clones.forEach((clone, index) => { clone.x = this.x + (index === 0 ? -70 : 70); clone.y = this.y; clone.update(); }); }
+            addXP(amount) { if (this.level >= XP_THRESHOLDS.length) return; this.xp += amount; if (this.xp >= XP_THRESHOLDS[this.level - 1]) this.levelUp(); xpBar.style.width = `${Math.min(100, (this.xp / XP_THRESHOLDS[this.level - 1]) * 100)}%`; const xpRect = xpBar.getBoundingClientRect(); for (let i = 0; i < 3; i++) particles.push(new Particle(xpRect.left + xpRect.width, xpRect.top + xpRect.height/2, Math.random() * 2, {x: Math.random() * 2, y: (Math.random() - 0.5)*2}, 'lightgreen')); } 
+            levelUp() { this.xp = 0; this.level++; levelEl.textContent = `LVL: ${this.level}`; playSound('levelUp'); floatingTexts.push(new FloatingText(this.x, this.y - 40, 'LEVEL UP!', '#facc15', 30)); for (let i = 0; i < 50; i++) particles.push(new Particle(this.x, this.y, Math.random() * 3, { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8 }, '#facc15')); } 
+            useBomb() { if (this.bombs > 0) { this.bombs--; playSound('explosion'); triggerScreenShake(25, 60); particles.push(new Shockwave(canvas.width / 2, canvas.height / 2)); enemies.forEach(enemy => { createExplosion(enemy); score += enemy.points; }); enemies = []; if(boss) { boss.health -= 50; boss.hitTimer = 20;} } } 
+            activatePowerUp(type) { 
+                if (type === 'BOMB') { this.bombs++; playSound('powerup'); return; } 
+                if (this.powerUpTimers[type]) clearTimeout(this.powerUpTimers[type].timeout);
+                const duration = (type === 'CLONE_ATTACK') ? 15000 : 10000;
+                if(type === 'SHIELD') { this.shieldActive = true; this.shieldHealth = this.maxShieldHealth; } 
                 else if(type === 'RAPID_FIRE') this.rapidFireActive = true;
-                
-                this.powerUpTimers[type] = setTimeout(() => {
-                    if(type === 'SHIELD') this.shieldActive = false;
+                else if (type === 'CLONE_ATTACK') { this.clones = [new PlayerClone(this.x - 70, this.y), new PlayerClone(this.x + 70, this.y)]; }
+                this.powerUpTimers[type] = { endTime: Date.now() + duration, timeout: setTimeout(() => { 
+                    if(type === 'SHIELD') this.shieldActive = false; 
                     else if(type === 'RAPID_FIRE') this.rapidFireActive = false;
-                }, 10000); // 10 seconds duration
-            }
+                    else if(type === 'CLONE_ATTACK') this.clones = [];
+                    delete this.powerUpTimers[type]; 
+                }, duration) }; playSound('powerup'); 
+            } 
+            takeHit(cause) { if (this.shieldActive) { this.shieldHealth--; if (this.shieldHealth <= 0) this.shieldActive = false; } else { handleDeath(cause); } playSound('playerHit'); triggerScreenShake(12, 20); gameContainer.style.boxShadow = '0 0 30px #ff0000, inset 0 0 20px #ff0000'; setTimeout(() => gameContainer.style.boxShadow = '0 0 15px rgba(79, 70, 229, 0.5)', 200); } 
         }
-        
-        class Bullet extends GameObject {
-            constructor(x, y, velocity) { super(x, y); this.velocity = velocity; this.radius = 8; this.image = preloadedImages.BULLET; this.alpha = 1; }
-            draw() { ctx.save(); ctx.globalAlpha = this.alpha; ctx.drawImage(this.image, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2); ctx.restore(); }
-            update() { super.update(); this.alpha -= 0.01; }
-        }
+        class Bullet extends GameObject { constructor(x, y, velocity) { super(x, y); this.velocity = velocity; this.radius = 8; this.image = preloadedImages.BULLET; this.alpha = 1; this.trail = []; } draw() { this.trail.forEach((p, i) => { ctx.save(); ctx.globalAlpha = (i / this.trail.length) * 0.5; ctx.drawImage(this.image, p.x - this.radius, p.y - this.radius, this.radius * 2, this.radius * 2); ctx.restore(); }); ctx.save(); ctx.globalAlpha = this.alpha; ctx.drawImage(this.image, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2); ctx.restore(); } update() { this.trail.push({x: this.x, y: this.y}); if (this.trail.length > 5) this.trail.shift(); super.update(); this.alpha -= 0.01; } }
+        class EnemyBullet extends GameObject { constructor(x, y, velocity) { super(x, y); this.velocity = velocity; this.radius = 10; this.image = preloadedImages.ENEMY_BULLET; } draw() { ctx.drawImage(this.image, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2); } }
+        class Enemy extends GameObject { constructor(x, y, velocity, type) { super(x, y); this.velocity = velocity; this.type = type; this.radius = type.radius; this.image = preloadedImages[type.asset]; this.health = type.health; this.points = type.points; this.hitTimer = 0; this.movementPattern = Math.random() > 0.7 ? 'sine' : 'straight'; this.initialX = x; this.shootCooldown = Math.random() * 50 + 50; } draw() { if (this.hitTimer > 0) { ctx.save(); ctx.filter = 'brightness(2.5)'; ctx.drawImage(this.image, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2); ctx.restore(); this.hitTimer--; } else { ctx.drawImage(this.image, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2); } } update() { if (this.movementPattern === 'sine') { this.x = this.initialX + Math.sin(this.y * 0.02) * 50; } super.update(); if (this.type.canShoot && this.shootCooldown <= 0 && this.y > 0) { const angle = Math.atan2(player.y - this.y, player.x - this.x); const speed = 3; enemyBullets.push(new EnemyBullet(this.x, this.y, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed })); this.shootCooldown = Math.random() * 100 + 100; } this.shootCooldown--; } }
+        class Boss extends GameObject { constructor(x, y) { super(x, y); this.radius = 100; this.image = preloadedImages.BOSS_ENEMY; this.health = 350; this.maxHealth = 350; this.hitTimer = 0; this.attackPattern = 'spread'; this.attackTimer = 0; this.targetY = 150; } draw() { this.y += (this.targetY - this.y) * 0.05; const healthPercentage = this.health / this.maxHealth; ctx.fillStyle = '#ff0000'; ctx.fillRect(this.x - this.radius, this.y - this.radius - 20, this.radius * 2, 10); ctx.fillStyle = '#00ff00'; ctx.fillRect(this.x - this.radius, this.y - this.radius - 20, this.radius * 2 * healthPercentage, 10); if (this.hitTimer > 0) { ctx.save(); ctx.filter = 'brightness(2.5)'; ctx.drawImage(this.image, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2); ctx.restore(); this.hitTimer--; } else { ctx.drawImage(this.image, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2); } } update() { this.draw(); this.attackTimer++; if (this.attackTimer % 150 === 0) this.attackPattern = 'targeted'; else if (this.attackTimer % 75 === 0) this.attackPattern = 'spread'; if (this.attackPattern === 'spread' && this.attackTimer % 10 === 0) { for (let i = 0; i < 8; i++) { const angle = (i / 8) * Math.PI * 2 + (frame * 0.01); enemyBullets.push(new EnemyBullet(this.x, this.y, {x: Math.cos(angle) * 3, y: Math.sin(angle) * 3})); } } if (this.attackPattern === 'targeted' && this.attackTimer % 20 === 0) { const angle = Math.atan2(player.y - this.y, player.x - this.x); enemyBullets.push(new EnemyBullet(this.x, this.y, { x: Math.cos(angle) * 5, y: Math.sin(angle) * 5 })); } } }
+        class PowerUp extends GameObject { constructor(x, y, type) { super(x, y); this.type = type; this.image = preloadedImages[`POWERUP_${type}`]; this.radius = 15; this.velocity.y = 1; } draw() { ctx.save(); const scale = 1 + Math.sin(frame * 0.1) * 0.1; ctx.filter = `brightness(${1 + Math.sin(frame * 0.1) * 0.2})`; ctx.drawImage(this.image, this.x - this.radius * scale, this.y - this.radius * scale, this.radius * 2 * scale, this.radius * 2 * scale); ctx.restore(); } }
+        class Particle extends GameObject { constructor(x, y, radius, velocity, color) { super(x, y); this.radius = radius; this.velocity = velocity; this.color = color; this.alpha = 1; this.friction = 0.98; } draw() { ctx.save(); ctx.globalAlpha = this.alpha; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fillStyle = this.color; ctx.fill(); ctx.restore(); } update() { this.velocity.x *= this.friction; this.velocity.y *= this.friction; super.update(); this.alpha -= 0.02; } }
+        class Shockwave extends GameObject { constructor(x, y) { super(x, y); this.radius = 20; this.alpha = 1; this.lineWidth = 15; } draw() { ctx.save(); ctx.globalAlpha = this.alpha; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.strokeStyle = 'white'; ctx.lineWidth = this.lineWidth; ctx.stroke(); ctx.restore(); } update() { this.draw(); this.radius += 20; this.lineWidth *= 0.95; this.alpha -= 0.02; } }
+        class FloatingText { constructor(x, y, text, color, size = 16) { this.x = x; this.y = y; this.text = text; this.color = color; this.alpha = 1.5; this.velocity = { y: -1 }; this.size = size;} draw() { ctx.save(); ctx.globalAlpha = Math.min(1, this.alpha); ctx.font = `bold ${this.size}px Orbitron`; ctx.fillStyle = this.color; ctx.textAlign = 'center'; ctx.fillText(this.text, this.x, this.y); ctx.restore(); } update() { this.draw(); this.y += this.velocity.y; this.alpha -= 0.02; } }
+        class Star { constructor() { this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height; this.size = Math.random() * 2 + 0.5; this.speed = Math.random() * 0.5 + 0.25; } update() { this.y += this.speed; if (this.y > canvas.height) { this.y = 0; this.x = Math.random() * canvas.width; } } draw() { ctx.fillStyle = `rgba(224, 224, 255, ${this.size / 2.5})`; ctx.fillRect(this.x, this.y, this.size, this.size); } }
+        class Nebula { constructor() { this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height; this.speed = Math.random() * 0.1 + 0.05; this.radius = Math.random() * 150 + 100; this.color = `rgba(${Math.random() * 50 + 100}, 50, ${Math.random() * 50 + 150}, 0.1)`; } update() { this.y += this.speed; if (this.y > canvas.height + this.radius) { this.y = -this.radius; this.x = Math.random() * canvas.width; } } draw() { ctx.beginPath(); const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius); grad.addColorStop(0, this.color); grad.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = grad; ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); } }
 
-        class Enemy extends GameObject {
-            constructor(x, y, velocity, type) { super(x, y); this.velocity = velocity; this.type = type; this.radius = type.radius; this.image = preloadedImages[type.asset]; this.health = type.health; this.points = type.points; }
-            draw() { ctx.drawImage(this.image, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2); }
-        }
-        
-        class PowerUp extends GameObject {
-            constructor(x, y, type) { super(x, y); this.type = type; this.image = preloadedImages[`POWERUP_${type}`]; this.radius = 15; this.velocity.y = 1; }
-            draw() { ctx.drawImage(this.image, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2); }
-        }
+        let player, bullets, enemies, particles, floatingTexts, powerUps, stars, nebulae, enemyBullets, boss;
+        let spawnInterval, difficultyMultiplier, scoreMultiplier, combo = 0, comboTimer = 0, bossActive = false, causeOfDeath = '';
 
-        class Particle extends GameObject {
-            constructor(x, y, radius, velocity, color) { super(x, y); this.radius = radius; this.velocity = velocity; this.color = color; this.alpha = 1; this.friction = 0.99; }
-            draw() { ctx.save(); ctx.globalAlpha = this.alpha; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fillStyle = this.color; ctx.fill(); ctx.restore(); }
-            update() { this.velocity.x *= this.friction; this.velocity.y *= this.friction; super.update(); this.alpha -= 0.02; }
-        }
-        
-        class FloatingText {
-            constructor(x, y, text, color) { this.x = x; this.y = y; this.text = text; this.color = color; this.alpha = 1; this.velocity = { y: -1 }; }
-            draw() { ctx.save(); ctx.globalAlpha = this.alpha; ctx.font = '16px Orbitron'; ctx.fillStyle = this.color; ctx.fillText(this.text, this.x, this.y); ctx.restore(); }
-            update() { this.draw(); this.y += this.velocity.y; this.alpha -= 0.02; }
-        }
-        
-        class Star {
-             constructor() {
-                this.x = Math.random() * canvas.width;
-                this.y = Math.random() * canvas.height;
-                this.size = Math.random() * 2 + 0.5;
-                this.speed = Math.random() * 0.5 + 0.25;
-            }
-            update() {
-                this.y += this.speed;
-                if (this.y > canvas.height) {
-                    this.y = 0;
-                    this.x = Math.random() * canvas.width;
-                }
-            }
-            draw() {
-                ctx.fillStyle = `rgba(224, 224, 255, ${this.size / 2.5})`;
-                ctx.fillRect(this.x, this.y, this.size, this.size);
-            }
-        }
-
-        let player, bullets, enemies, particles, floatingTexts, powerUps, stars;
-        let spawnInterval, difficultyMultiplier, scoreMultiplier;
-
-        const ENEMY_TYPES = {
-            ORACLE: { asset: 'ENEMY_ORACLE', health: 1, points: 10, radius: 25, message: '+10 Decentralized!' },
-            BRIDGE: { asset: 'ENEMY_BRIDGE', health: 2, points: 20, radius: 30, message: '+20 Bridge Removed!' },
-            CHAIN: { asset: 'ENEMY_CHAIN', health: 3, points: 30, radius: 20, message: '+30 Chain Repaired!' },
-            VALIDATOR: { asset: 'ENEMY_VALIDATOR', health: 5, points: 50, radius: 40, message: '+50 Smashed!' },
-            MEV_BOT: { asset: 'ENEMY_MEV_BOT', health: 2, points: 25, radius: 28, message: '+25 Bot Wrecked!' },
-            SILO: { asset: 'ENEMY_SILO', health: 4, points: 40, radius: 35, message: '+40 Silo Busted!' },
-            RUG_PULL: { asset: 'ENEMY_RUG_PULL', health: 1, points: 100, radius: 22, message: '+100 Rug Pulled!' },
-        };
-        const POWERUP_TYPES = ['SHIELD', 'RAPID_FIRE', 'SCORE_BOOST'];
+        const XP_THRESHOLDS = [100, 250, 500, 1000, 2000, 4000, 8000]; 
+        const ENEMY_TYPES = { ORACLE: { asset: 'ENEMY_ORACLE', health: 1, points: 10, radius: 25 }, BRIDGE: { asset: 'ENEMY_BRIDGE', health: 2, points: 20, radius: 30 }, CHAIN: { asset: 'ENEMY_CHAIN', health: 3, points: 30, radius: 20 }, VALIDATOR: { asset: 'ENEMY_VALIDATOR', health: 5, points: 50, radius: 40, canShoot: true }, MEV_BOT: { asset: 'ENEMY_MEV_BOT', health: 2, points: 25, radius: 28, canShoot: true }, SILO: { asset: 'ENEMY_SILO', health: 4, points: 40, radius: 35 }, RUG_PULL: { asset: 'ENEMY_RUG_PULL', health: 1, points: 100, radius: 22 }, ELITE_VALIDATOR: { asset: 'ENEMY_VALIDATOR', health: 25, points: 500, radius: 80, canShoot: true }};
+        const POWERUP_TYPES = ['SHIELD', 'RAPID_FIRE', 'SCORE_BOOST', 'BOMB'];
+        const COMBO_NOTES = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"];
 
         function init() {
-            gameActive = true;
-            score = 0; scoreEl.textContent = 0;
-            difficultyMultiplier = 1; scoreMultiplier = 1;
-            
+            gameActive = true; pauseGame = false; score = 0; difficultyMultiplier = 1; scoreMultiplier = 1; combo = 0; comboTimer = 0; frame = 0; bossActive = false; boss = null;
             player = new Player(canvas.width / 2, canvas.height - 80);
-            bullets = []; enemies = []; particles = []; floatingTexts = []; powerUps = [];
+            bullets = []; enemies = []; particles = []; floatingTexts = []; powerUps = []; enemyBullets = [];
             stars = Array.from({ length: 100 }, () => new Star());
-            
-            gameOverModal.classList.add('hidden');
-            startModal.classList.add('hidden');
-
+            nebulae = Array.from({ length: 5 }, () => new Nebula());
+            scoreEl.textContent = 0; levelEl.textContent = 'LVL: 1'; xpBar.style.width = '0%';
+            gameOverModal.classList.add('hidden'); startModal.classList.add('hidden'); reviveModal.classList.add('hidden');
             if (spawnInterval) clearInterval(spawnInterval);
             spawnInterval = setInterval(spawnEnemies, 1500);
-            
+            startMusic();
             if (animationId) cancelAnimationFrame(animationId);
             animate();
         }
 
-        function spawnEnemies() {
-            if (!gameActive) return;
-            const enemyTypes = Object.values(ENEMY_TYPES);
-            const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-            const x = Math.random() * (canvas.width - type.radius * 2) + type.radius;
-            const speed = (Math.random() * 1.5 + 1) * difficultyMultiplier;
-            enemies.push(new Enemy(x, -type.radius, { x: 0, y: speed }, type));
-            
-            if (spawnInterval > 500) {
-                 clearInterval(spawnInterval);
-                 spawnInterval = setInterval(spawnEnemies, 1500 / (difficultyMultiplier += 0.05));
-            }
-        }
-        
-        let screenShake = { intensity: 0, duration: 0 };
-        function triggerScreenShake(intensity, duration) {
-            screenShake.intensity = intensity;
-            screenShake.duration = duration;
-        }
+        function spawnBoss() { bossActive = true; clearInterval(spawnInterval); boss = new Boss(canvas.width / 2, -100); floatingTexts.push(new FloatingText(canvas.width/2, canvas.height/2, "WARNING!", "red", 60)); playSound('bossLaugh'); }
+        function spawnEnemies() { if (!gameActive || bossActive) return; let type; if (Math.random() < 0.05 * difficultyMultiplier) { type = ENEMY_TYPES.ELITE_VALIDATOR; } else { const enemyTypes = Object.values(ENEMY_TYPES).filter(t => t !== ENEMY_TYPES.ELITE_VALIDATOR); type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)]; } const x = Math.random() * (canvas.width - type.radius * 2) + type.radius; const speed = (Math.random() * 1.5 + 0.5) * difficultyMultiplier; enemies.push(new Enemy(x, -type.radius, { x: 0, y: speed }, type)); if (spawnInterval > 400) { clearInterval(spawnInterval); spawnInterval = setInterval(spawnEnemies, 1500 / (difficultyMultiplier += 0.02)); } }
+        function triggerScreenShake(intensity, duration) { screenShake.intensity = intensity; screenShake.duration = duration; }
+        function drawUI() { if (combo > 1) { const comboSize = Math.min(60, 24 + combo * 1.5); ctx.font = `900 ${comboSize}px Orbitron`; ctx.textAlign = 'center'; const alpha = Math.min(1, comboTimer / 120); ctx.fillStyle = `rgba(255, ${200 + (combo * 2)}, 0, ${alpha})`; ctx.fillText(`${combo}x`, canvas.width / 2, 80); } if (player.bombs > 0) { ctx.drawImage(preloadedImages.POWERUP_BOMB, 20, canvas.height - 50, 30, 30); ctx.font = 'bold 24px Orbitron'; ctx.fillStyle = 'white'; ctx.textAlign = 'left'; ctx.fillText(`x${player.bombs}`, 55, canvas.height - 28); } let powerUpX = canvas.width / 2 - (Object.keys(player.powerUpTimers).length * 40 / 2); for(const type in player.powerUpTimers) { const timer = player.powerUpTimers[type]; const remaining = (timer.endTime - Date.now()) / 10000; ctx.drawImage(preloadedImages[`POWERUP_${type}`], powerUpX, canvas.height - 50, 30, 30); ctx.beginPath(); ctx.arc(powerUpX + 15, canvas.height - 35, 18, -Math.PI / 2, -Math.PI / 2 + (remaining * Math.PI * 2)); ctx.strokeStyle = "white"; ctx.lineWidth = 3; ctx.stroke(); powerUpX += 45; } }
+        function createExplosion(entity) { for (let i = 0; i < entity.radius * 2.5; i++) { const angle = Math.random() * Math.PI * 2; const speed = Math.random() * 8; particles.push(new Particle(entity.x, entity.y, Math.random() * 4, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed}, `hsl(${Math.random() * 60 + 210}, 90%, 70%)`)); } playSound('explosion'); }
 
+        let screenShake = { intensity: 0, duration: 0 };
         function animate() {
-            animationId = requestAnimationFrame(animate);
-            let dx = 0, dy = 0;
-            if (screenShake.duration > 0) {
-                dx = (Math.random() - 0.5) * screenShake.intensity;
-                dy = (Math.random() - 0.5) * screenShake.intensity;
-                screenShake.duration--;
-            }
+            animationId = requestAnimationFrame(animate); 
+            if (pauseGame) return;
+            frame++;
+            if(comboTimer > 0) comboTimer--; else combo = 0;
             
             ctx.save();
-            ctx.translate(dx, dy);
-            ctx.fillStyle = '#0a0a1a';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            stars.forEach(star => { star.update(); star.draw(); });
+            ctx.fillStyle = '#0a0a1a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            stars.forEach(s => { s.update(); s.draw(); });
+            nebulae.forEach(n => { n.update(); n.draw(); });
             
             if (!gameActive) { ctx.restore(); return; }
 
             player.update();
 
-            [particles, floatingTexts, bullets, powerUps].forEach(arr => arr.forEach((item, index) => {
-                if (item.alpha <= 0 || item.y > canvas.height + 20) arr.splice(index, 1);
-                else item.update();
-            }));
+            [particles, floatingTexts, bullets, powerUps, enemyBullets].forEach(arr => arr.forEach((item, index) => { if (item.alpha <= 0 || item.y > canvas.height + 40 || item.y < -40 || item.x < -40 || item.x > canvas.width + 40) arr.splice(index, 1); else item.update(); }));
+
+            enemyBullets.forEach((bullet, bIndex) => { if(Math.hypot(player.x - bullet.x, player.y - bullet.y) - player.radius - bullet.radius < 1) { enemyBullets.splice(bIndex, 1); player.takeHit('bullet'); } });
+            
+            if (!bossActive && score > 2500) spawnBoss();
+            if (boss) { boss.update(); if (Math.hypot(player.x - boss.x, player.y - boss.y) - boss.radius - player.radius < 1) player.takeHit('collision'); }
 
             enemies.forEach((enemy, eIndex) => {
                 enemy.update();
-                if (Math.hypot(player.x - enemy.x, player.y - enemy.y) - enemy.radius - player.radius < 1) {
-                    if (player.shieldActive) {
-                        player.shieldHealth--;
-                        if (player.shieldHealth <= 0) player.shieldActive = false;
-                        enemies.splice(eIndex, 1);
-                        triggerScreenShake(8, 15);
-                        playSound('explosion');
-                    } else {
-                        gameOver();
-                    }
-                }
-            });
-            
-            powerUps.forEach((powerUp, pIndex) => {
-                if(Math.hypot(player.x - powerUp.x, player.y - powerUp.y) - powerUp.radius - player.radius < 1) {
-                    player.activatePowerUp(powerUp.type);
-                    if(powerUp.type === 'SCORE_BOOST') {
-                        scoreMultiplier = 2;
-                        setTimeout(() => scoreMultiplier = 1, 10000);
-                    }
-                    powerUps.splice(pIndex, 1);
-                    playSound('powerup');
-                }
+                if (Math.hypot(player.x - enemy.x, player.y - enemy.y) - enemy.radius - player.radius < 1) { player.takeHit('collision'); createExplosion(enemy); enemies.splice(eIndex, 1); }
+                if (enemy.y > canvas.height + enemy.radius) { enemies.splice(eIndex, 1); player.takeHit('slipped_past'); floatingTexts.push(new FloatingText(player.x, player.y - 60, 'Slipped Past!', '#f43f5e', 20)); }
             });
 
+            powerUps.forEach((powerUp, pIndex) => { powerUp.update(); if(Math.hypot(player.x - powerUp.x, player.y - powerUp.y) - player.radius - powerUp.radius < 1) { player.activatePowerUp(powerUp.type); if(powerUp.type === 'SCORE_BOOST') { scoreMultiplier = 2; setTimeout(() => scoreMultiplier = 1, 10000); } powerUps.splice(pIndex, 1); } });
+            
             bullets.forEach((bullet, bIndex) => {
                 enemies.forEach((enemy, eIndex) => {
-                    if (Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y) - enemy.radius - bullet.radius < 1) {
-                        for (let i = 0; i < 5; i++) particles.push(new Particle(bullet.x, bullet.y, Math.random() * 2, {x: (Math.random() - 0.5) * 2, y: (Math.random() - 0.5) * 2}, '#fff'));
-                        
-                        enemy.health -= 1;
+                    if (bullet && enemy && Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y) - enemy.radius - bullet.radius < 1) {
+                        playSound('hit'); enemy.hitTimer = 5; enemy.health -= 1;
                         if (enemy.health <= 0) {
-                            for (let i = 0; i < enemy.radius * 1.5; i++) particles.push(new Particle(bullet.x, bullet.y, Math.random() * 3, { x: (Math.random() - 0.5) * (Math.random() * 6), y: (Math.random() - 0.5) * (Math.random() * 6)}, `hsl(${Math.random() * 60 + 220}, 80%, 60%)`));
-                            const points = enemy.points * scoreMultiplier;
-                            score += points;
-                            scoreEl.textContent = score;
-                            floatingTexts.push(new FloatingText(enemy.x, enemy.y, enemy.type.message + (scoreMultiplier > 1 ? ' x2!' : ''), '#4ade80'));
-                            if (Math.random() < 0.15) { // 15% chance to drop powerup
-                                powerUps.push(new PowerUp(enemy.x, enemy.y, POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)]));
-                            }
-                            enemies.splice(eIndex, 1);
-                            triggerScreenShake(5, 10);
-                            playSound('explosion');
+                            combo++; comboTimer = 180;
+                            playSound('combo', COMBO_NOTES[Math.min(combo, COMBO_NOTES.length - 1)]);
+                            const points = enemy.points * (1 + (combo * 0.1)) * scoreMultiplier;
+                            score += points; player.addXP(enemy.points);
+                            floatingTexts.push(new FloatingText(enemy.x, enemy.y, `+${Math.round(points)}`, '#4ade80'));
+                            if (Math.random() < 0.20) { powerUps.push(new PowerUp(enemy.x, enemy.y, POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)])); }
+                            enemies.splice(eIndex, 1); createExplosion(enemy); triggerScreenShake(5, 10);
                         }
                         bullets.splice(bIndex, 1);
                     }
                 });
+                if(boss && bullet && Math.hypot(bullet.x - boss.x, bullet.y - boss.y) - boss.radius - bullet.radius < 1) {
+                    playSound('hit'); boss.hitTimer = 5; boss.health -= 1;
+                    if(boss.health <= 0) { score += 5000; createExplosion(boss); boss = null; bossActive = false; spawnInterval = setInterval(spawnEnemies, 1000); }
+                     bullets.splice(bIndex, 1);
+                }
             });
+            
+            drawUI();
             ctx.restore();
+            scoreEl.textContent = Math.round(score);
+        }
+        
+        function handleDeath(cause) {
+            causeOfDeath = cause;
+            if (player.lifelines > 0) {
+                player.lifelines--;
+                pauseGame = true;
+                if(musicLoop) musicLoop.stop(0);
+                Tone.Transport.stop();
+                startHeartbeatSound();
+                reviveModal.classList.remove('hidden');
+            } else {
+                gameOver();
+            }
+        }
+        
+        function revivePlayer(type) {
+            stopHeartbeatSound();
+            startMusic();
+            pauseGame = false;
+            reviveModal.classList.add('hidden');
+            enemies = []; enemyBullets = [];
+            player.x = canvas.width / 2;
+            player.y = canvas.height - 80;
+            player.targetX = player.x;
+            player.targetY = player.y;
+
+            if (type === 'SHIELD') player.activatePowerUp('SHIELD');
+            else if (type === 'CLONE_ATTACK') { player.activatePowerUp('CLONE_ATTACK'); } 
+            else if (type === 'SCORE_BOOST') { player.activatePowerUp('SCORE_BOOST'); scoreMultiplier = 2; setTimeout(() => scoreMultiplier = 1, 10000); }
         }
         
         function gameOver() {
-            if (!gameActive) return;
-            gameActive = false;
-            playSound('gameOver');
-            triggerScreenShake(15, 30);
+            if (!gameActive) return; gameActive = false;
+            playSound('gameOver'); triggerScreenShake(15, 30);
             
-            finalScoreEl.textContent = score;
-            let achievement = 'Just getting started...';
-            let memeSrc = preloadedImages.MEME_1.src;
-            if(score > 500) { achievement = 'Centralization Nemesis!'; memeSrc = preloadedImages.MEME_2.src; }
-            if(score > 1500) { achievement = 'Legendary Oracle Slayer!'; memeSrc = preloadedImages.MEME_3.src; }
+            let currentDisplayScore = 0; const final = Math.round(score);
+            const increment = Math.max(1, Math.ceil(final / 100));
+            function animateScore() { if (currentDisplayScore < final) { currentDisplayScore = Math.min(final, currentDisplayScore + increment); finalScoreEl.textContent = currentDisplayScore; requestAnimationFrame(animateScore); } }
+            animateScore();
+
+            let achievement = 'Participation trophy lol'; let memeSrc = preloadedImages.MEME_LOW_SCORE.src;
+            if (causeOfDeath === 'bullet') { achievement = 'Shoulda dodged. Skill issue.'; memeSrc = preloadedImages.MEME_BULLET_DEATH.src; }
+            else if(score > 3000) { achievement = 'Absolute degen slayer. Touch grass.'; memeSrc = preloadedImages.MEME_HIGH_SCORE.src; }
+            else if(score > 1000) { achievement = 'Okay, you popped off a little.'; memeSrc = preloadedImages.MEME_MID_SCORE.src; }
+            
             achievementText.textContent = `"${achievement}"`;
-            achievementMeme.src = memeSrc;
-            achievementMeme.classList.remove('hidden');
-            
+            achievementMeme.src = memeSrc; achievementMeme.classList.remove('hidden');
             gameOverModal.classList.remove('hidden');
         }
 
-        const mouse = { x: 0, y: 0 };
-        function handleMove(clientX, clientY) {
-            const rect = canvas.getBoundingClientRect();
-            mouse.x = clientX - rect.left;
-            mouse.y = clientY - rect.top;
-            if (player) {
-                player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, mouse.x));
-                player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, mouse.y));
-            }
-        }
+        function handleMove(clientX, clientY) { const rect = canvas.getBoundingClientRect(); if (player) { player.targetX = Math.max(player.radius, Math.min(canvas.width - player.radius, clientX - rect.left)); player.targetY = Math.max(player.radius, Math.min(canvas.height - player.radius, clientY - rect.top)); } }
         
         let lastShotTime = 0;
-        function handleShoot() {
-            if (!gameActive) return;
-            const now = Date.now();
-            const fireRate = player.rapidFireActive ? 150 : 300;
-            if (now - lastShotTime > fireRate) {
-                const velocity = { x: 0, y: -10 };
-                bullets.push(new Bullet(player.x, player.y - player.radius, velocity));
-                playSound('shoot');
-                lastShotTime = now;
+        function handleShoot() { 
+            if (!gameActive || pauseGame) return; 
+            const fireRate = player.rapidFireActive ? 100 : 250; 
+            if (Date.now() - lastShotTime < fireRate) return; 
+            
+            const createBulletSpread = (origin) => {
+                const baseVel = { x: 0, y: -12 }; 
+                switch(player.level) { 
+                    case 1: bullets.push(new Bullet(origin.x, origin.y - player.radius, baseVel)); break; 
+                    case 2: bullets.push(new Bullet(origin.x - 10, origin.y - player.radius, baseVel)); bullets.push(new Bullet(origin.x + 10, origin.y - player.radius, baseVel)); break; 
+                    case 3: bullets.push(new Bullet(origin.x, origin.y - player.radius, baseVel)); bullets.push(new Bullet(origin.x - 15, origin.y - player.radius, {x: -1, y: -12})); bullets.push(new Bullet(origin.x + 15, origin.y - player.radius, {x: 1, y: -12})); break; 
+                    default: bullets.push(new Bullet(origin.x, origin.y - player.radius, baseVel)); bullets.push(new Bullet(origin.x - 20, origin.y - player.radius, {x: -2, y: -11})); bullets.push(new Bullet(origin.x + 20, origin.y - player.radius, {x: 2, y: -11})); bullets.push(new Bullet(origin.x - 30, origin.y - player.radius, {x: -1, y: -12})); bullets.push(new Bullet(origin.x + 30, origin.y - player.radius, {x: 1, y: -12})); break; 
+                }
             }
+            
+            createBulletSpread(player);
+            player.clones.forEach(clone => createBulletSpread(clone));
+
+            playSound('shoot'); 
+            lastShotTime = Date.now(); 
         }
         
-        // Desktop + Mobile Controls
+        let shootingInterval = null;
+        const startShooting = () => { if(shootingInterval || pauseGame) return; handleShoot(); shootingInterval = setInterval(handleShoot, 100); };
+        const stopShooting = () => { clearInterval(shootingInterval); shootingInterval = null; };
+        
+        let lastTap = 0;
         canvas.addEventListener('mousemove', (e) => handleMove(e.clientX, e.clientY));
         canvas.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e.touches[0].clientX, e.touches[0].clientY); });
-        
-        let shootingInterval = null;
-        canvas.addEventListener('mousedown', () => { handleShoot(); shootingInterval = setInterval(handleShoot, 100); });
-        canvas.addEventListener('mouseup', () => clearInterval(shootingInterval));
-        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleShoot(); shootingInterval = setInterval(handleShoot, 100); });
-        canvas.addEventListener('touchend', () => clearInterval(shootingInterval));
-
+        canvas.addEventListener('mousedown', startShooting);
+        canvas.addEventListener('mouseup', stopShooting);
+        canvas.addEventListener('mouseleave', stopShooting);
+        canvas.addEventListener('touchstart', (e) => {  e.preventDefault(); const now = Date.now(); if (now - lastTap < 300) { player.useBomb(); } lastTap = now; handleMove(e.touches[0].clientX, e.touches[0].clientY); startShooting(); });
+        canvas.addEventListener('touchend', stopShooting);
+        canvas.addEventListener('dblclick', (e) => {e.preventDefault(); player.useBomb(); });
 
         startGameBtn.addEventListener('click', init);
         restartGameBtn.addEventListener('click', init);
+        helper1Btn.addEventListener('click', () => revivePlayer('SHIELD'));
+        helper2Btn.addEventListener('click', () => revivePlayer('CLONE_ATTACK'));
+        helper3Btn.addEventListener('click', () => revivePlayer('SCORE_BOOST'));
+        shareScoreBtn.addEventListener('click', () => { const textToCopy = `I became a "${achievementText.textContent.replace(/"/g, '')}" with a score of ${Math.round(score)} in Rialo: The Oracle Slayer! Can you beat it?`; const textArea = document.createElement("textarea"); textArea.value = textToCopy; textArea.style.position = "fixed"; textArea.style.top = "0"; textArea.style.left = "0"; document.body.appendChild(textArea); textArea.focus(); textArea.select(); try { if (document.execCommand('copy')) { shareScoreBtn.textContent = 'Copied!'; setTimeout(() => shareScoreBtn.textContent = 'Share', 2000); } } catch (err) { console.error('Oops, unable to copy', err); } document.body.removeChild(textArea); });
 
-        // Start with a static render of the starfield
-        ctx.fillStyle = '#0a0a1a';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        function handleParallax(e) { if (gameActive) return; const { clientX, clientY } = e.touches ? e.touches[0] : e; const x = (clientX / window.innerWidth - 0.5) * -20; const y = (clientY / window.innerHeight - 0.5) * -20; canvas.style.transform = `translate(${x}px, ${y}px)`; }
+        window.addEventListener('mousemove', handleParallax);
+
+        ctx.fillStyle = '#0a0a1a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         stars = Array.from({ length: 100 }, () => new Star());
         stars.forEach(star => star.draw());
     });
